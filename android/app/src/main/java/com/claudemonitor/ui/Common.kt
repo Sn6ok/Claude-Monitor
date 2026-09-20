@@ -102,6 +102,16 @@ fun connectionColor(state: RelayClient.ConnectionState): Color = when (state) {
     RelayClient.ConnectionState.DISCONNECTED -> StateUnknown
 }
 
+/** Чому вузол не дав даних — нашою мовою, а не чужим повідомленням. */
+fun nodeErrorText(error: Protocol.NodeError, strings: Strings): String = when (error) {
+    Protocol.NodeError.START_FAILED -> strings.nodeErrorStart
+    Protocol.NodeError.TIMEOUT -> strings.nodeErrorTimeout
+    Protocol.NodeError.EXIT_CODE -> strings.nodeErrorExit
+    Protocol.NodeError.BAD_OUTPUT -> strings.nodeErrorOutput
+    Protocol.NodeError.TOO_LARGE -> strings.nodeErrorTooLarge
+    Protocol.NodeError.NONE -> ""
+}
+
 /** Час доби для стрічки подій. */
 fun formatClock(timestampMs: Long): String {
     if (timestampMs <= 0) return "--:--:--"

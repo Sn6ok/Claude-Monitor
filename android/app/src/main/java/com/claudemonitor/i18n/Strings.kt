@@ -84,6 +84,14 @@ class Strings(
     val emptyNoTasksTitle: String,
     val emptyNoTasksHint: String,
 
+    // ── Вузли ──
+    val sectionNodes: String,
+    val nodeErrorStart: String,
+    val nodeErrorTimeout: String,
+    val nodeErrorExit: String,
+    val nodeErrorOutput: String,
+    val nodeErrorTooLarge: String,
+
     // ── Екран задачі ──
     val back: String,
     val copyAll: String,
@@ -285,6 +293,13 @@ val UkStrings = Strings(
     emptyNoInactiveHint = "Усі задачі зараз у роботі — вони у вкладці «Активні».",
     emptyNoTasksTitle = "Задач немає",
     emptyNoTasksHint = "Щойно ви почнете роботу в Claude Code, задача з'явиться тут.",
+
+    sectionNodes = "ВУЗЛИ",
+    nodeErrorStart = "вузол не вдалося запустити",
+    nodeErrorTimeout = "вузол не встиг відповісти",
+    nodeErrorExit = "вузол завершився з помилкою",
+    nodeErrorOutput = "вузол надіслав не ті дані",
+    nodeErrorTooLarge = "вузол надіслав забагато даних",
 
     back = "‹  Назад",
     copyAll = "Копіювати все",
@@ -497,6 +512,13 @@ val EnStrings = Strings(
     emptyNoInactiveHint = "All tasks are busy — they are in the «Active» tab.",
     emptyNoTasksTitle = "No tasks",
     emptyNoTasksHint = "As soon as you start working in Claude Code, the task will appear here.",
+
+    sectionNodes = "NODES",
+    nodeErrorStart = "the node could not be started",
+    nodeErrorTimeout = "the node did not answer in time",
+    nodeErrorExit = "the node finished with an error",
+    nodeErrorOutput = "the node sent unexpected data",
+    nodeErrorTooLarge = "the node sent too much data",
 
     back = "‹  Back",
     copyAll = "Copy all",

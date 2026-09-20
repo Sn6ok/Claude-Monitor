@@ -35,6 +35,9 @@ data class UiState(
 
     val bridge: Protocol.BridgeInfo? = null,
 
+    /** Картки вузлів — розширень, доданих на ноутбуці. */
+    val nodes: List<Protocol.NodeCard> = emptyList(),
+
     /** Задачі за ідентифікатором. Порядок для показу дає [orderedTasks]. */
     val tasks: Map<String, Protocol.TaskSession> = emptyMap(),
 
@@ -226,6 +229,7 @@ class MonitorController(private val app: Application) {
 
             current.copy(
                 bridge = snapshot.bridge,
+                nodes = snapshot.nodes,
                 tasks = tasks,
                 taskEvents = events,
                 selectedTaskId = selected,

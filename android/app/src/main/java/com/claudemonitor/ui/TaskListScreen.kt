@@ -77,6 +77,7 @@ fun TaskListScreen(
         }
     }
 
+    val strings = LocalStrings.current
     val filter = state.taskFilter
     val tasks = state.orderedTasks.filter { filter.matches(it.state) }
 
@@ -86,7 +87,7 @@ fun TaskListScreen(
         StateChips(state.tasks.values)
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
-        if (tasks.isEmpty()) {
+        if (tasks.isEmpty() && state.nodes.isEmpty()) {
             EmptyState(state, filter)
         } else {
             LazyColumn(
@@ -94,12 +95,28 @@ fun TaskListScreen(
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                // Вузли — над задачами: це довідка про ноутбук, а не робота Claude.
+                if (state.nodes.isNotEmpty()) {
+                    item(key = "nodes") { NodesSection(state.nodes) }
+                }
+
                 items(tasks, key = { it.sessionId }) { task ->
                     TaskCard(
                         task = task,
                         nowMs = nowMs,
                         onClick = { onOpenTask(task.sessionId) },
                     )
+                }
+
+                if (tasks.isEmpty()) {
+                    item(key = "no-tasks") {
+                        Text(
+                            text = strings.emptyNoTasksTitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
                 }
             }
         }
@@ -447,5 +464,99 @@ private fun EmptyState(state: UiState, filter: TaskFilter) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+/**
+ * Картки вузлів.
+ *
+ * Вузол — розширення, яке власник ноутбука сам поклав у папку `nodes`
+ * (docs/nodes.md). Застосунок лише показує те, що вузол надіслав, і чесно
+ * каже, коли вузол не дав даних.
+ */
+@Composable
+private fun NodesSection(nodes: List<Protocol.NodeCard>) {
+    val strings = LocalStrings.current
+
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = strings.sectionNodes,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        for (node in nodes) {
+            NodeCardView(node)
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun NodeCardView(node: Protocol.NodeCard) {
+    val strings = LocalStrings.current
+    val color = when (node.status) {
+        "error" -> StateError
+        "warn" -> StateWaiting
+        else -> StateWorking
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(color, 8)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = node.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            if (node.error != Protocol.NodeError.NONE) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = nodeErrorText(node.error, strings),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = StateError,
+                )
+                return@Column
+            }
+
+            for (line in node.lines) {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = line.label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = line.value,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+
+            node.text?.let { text ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
     }
 }

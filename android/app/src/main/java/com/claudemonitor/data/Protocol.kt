@@ -25,6 +25,10 @@ object Protocol {
     // Межі історії подій на телефоні задає EventHistory: там і кількість,
     // і сумарний обсяг тексту.
     const val MAX_FINISHED = 20
+
+    /** Скільки вузлів і рядків у картці приймається. Ті самі межі, що й у Bridge. */
+    const val MAX_NODES = 16
+    const val MAX_NODE_LINES = 12
     const val CLOCK_SKEW_MS = 300_000L
 
     // ── Стани ────────────────────────────────────────────────────────────────
@@ -207,12 +211,49 @@ object Protocol {
         val error: Int = 0,
     )
 
+    /** Рядок картки вузла: підпис і значення. */
+    data class NodeLine(val label: String, val value: String)
+
+    /**
+     * Чому вузол не дав даних.
+     *
+     * З ноутбука приходить код, а не готовий текст: пояснення застосунок
+     * пише своєю мовою.
+     */
+    enum class NodeError(val wire: String) {
+        NONE(""),
+        START_FAILED("start_failed"),
+        TIMEOUT("timeout"),
+        EXIT_CODE("exit_code"),
+        BAD_OUTPUT("bad_output"),
+        TOO_LARGE("too_large");
+
+        companion object {
+            fun from(value: String): NodeError = entries.firstOrNull { it.wire == value } ?: NONE
+        }
+    }
+
+    /**
+     * Картка вузла — розширення, яке власник ноутбука сам поклав у папку
+     * `nodes`. Це додаткові дані поруч із задачами, а не частина Claude Code.
+     */
+    data class NodeCard(
+        val id: String,
+        val name: String,
+        val status: String,
+        val lines: List<NodeLine> = emptyList(),
+        val text: String? = null,
+        val error: NodeError = NodeError.NONE,
+        val updatedAtMs: Long = 0,
+    )
+
     data class Snapshot(
         val sequence: Long,
         val bridge: BridgeInfo?,
         val summary: Summary,
         val sessions: List<TaskSession>,
         val finished: List<FinishedTask>,
+        val nodes: List<NodeCard> = emptyList(),
     )
 
     // ── Формування кадрів ────────────────────────────────────────────────────
@@ -339,8 +380,48 @@ object Protocol {
             summary = summary,
             sessions = parseSessions(root.optJSONArray("sessions")),
             finished = parseFinished(root.optJSONArray("finished")),
+            nodes = parseNodes(root.optJSONArray("nodes")),
         )
     }.getOrNull()
+
+    /**
+     * Картки вузлів. Вузол без ідентифікатора відкидається — як і задача:
+     * показати його коректно неможливо, а вигадувати нічого не можна.
+     */
+    private fun parseNodes(array: JSONArray?): List<NodeCard> {
+        if (array == null) return emptyList()
+        val out = ArrayList<NodeCard>(minOf(array.length(), MAX_NODES))
+
+        for (i in 0 until minOf(array.length(), MAX_NODES)) {
+            val item = array.optJSONObject(i) ?: continue
+            val id = item.optString("id")
+            if (id.isEmpty()) continue
+
+            val linesJson = item.optJSONArray("lines")
+            val count = minOf(linesJson?.length() ?: 0, MAX_NODE_LINES)
+            val lines = ArrayList<NodeLine>(count)
+            for (j in 0 until count) {
+                val line = linesJson?.optJSONObject(j) ?: continue
+                val label = line.optString("label")
+                val value = line.optString("value")
+                if (label.isEmpty() && value.isEmpty()) continue
+                lines.add(NodeLine(label, value))
+            }
+
+            out.add(
+                NodeCard(
+                    id = id,
+                    name = item.optString("name").ifEmpty { id },
+                    status = item.optString("status").ifEmpty { "ok" },
+                    lines = lines,
+                    text = item.optString("text").ifEmpty { null },
+                    error = NodeError.from(item.optString("error")),
+                    updatedAtMs = item.optLong("updated_at", 0),
+                )
+            )
+        }
+        return out
+    }
 
     private fun parseSessions(array: JSONArray?): List<TaskSession> {
         if (array == null) return emptyList()
