@@ -1,0 +1,10 @@
+{
+  "id": "disk-space",
+  "name": "Диски",
+  "description": "Вільне місце на локальних дисках",
+  "version": "1.0.0",
+  "run": "run.ps1",
+  "intervalSec": 120,
+  "timeoutSec": 10,
+  "enabled": true
+}

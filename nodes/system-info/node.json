@@ -1,0 +1,10 @@
+{
+  "id": "system-info",
+  "name": "Система",
+  "description": "Процесор, вільна пам'ять і час роботи ноутбука",
+  "version": "1.0.0",
+  "run": "run.ps1",
+  "intervalSec": 15,
+  "timeoutSec": 10,
+  "enabled": true
+}

@@ -212,6 +212,14 @@ $setupData | ConvertTo-Json | Set-Content $setupFile -Encoding utf8 -NoNewline
 & icacls.exe $setupFile /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
 Write-Ok "налаштування збережено в $dataDir"
 
+# Папка вузлів — розширень, які показують у застосунку свої картки
+# (docs/nodes.md). Порожня папка нікому не заважає, але позбавляє
+# зайвого кроку тих, хто захоче додати вузол.
+$nodesDir = Join-Path $dataDir "nodes"
+if (-not (Test-Path $nodesDir)) {
+    New-Item -ItemType Directory -Force -Path $nodesDir | Out-Null
+}
+
 # ── 4. Адреса для Bridge ─────────────────────────────────────────────────────
 
 if ($relayUrl -and (Test-Path $bridgeExe)) {
@@ -231,6 +239,7 @@ Write-Host ""
 Write-Host "  1. Запустіть систему:      .\scripts\start-all.ps1"
 Write-Host "  2. Підключіть телефон:     `"$bridgeExe`" --pair" -ForegroundColor Yellow
 Write-Host "     У застосунку введіть адресу Relay і код із вікна."
+Write-Host "  3. Вузли (необов'язково):  .\scripts\install-node.ps1 .\nodes\system-info"
 Write-Host ""
 Write-Dim "Телефонів можна підключити до п'яти. Повторне налаштування: setup.ps1 -Force"
 Write-Host ""
