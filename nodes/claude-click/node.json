@@ -1,0 +1,22 @@
+{
+  "id": "claude-click",
+  "name": "Claude Click",
+  "description": "Пише в чаті, куди Claude натискає мишкою",
+  "version": "1.0.0",
+  "run": "run.ps1",
+  "intervalSec": 30,
+  "timeoutSec": 10,
+  "enabled": true,
+  "commands": [
+    {
+      "match": "click.py",
+      "args": ["x", "y", "label"],
+      "text": "Натискаю: {label}",
+      "fallback": "Натискаю: точка {x}, {y}"
+    },
+    {
+      "match": "screenshot.py",
+      "text": "Дивлюся на екран"
+    }
+  ]
+}

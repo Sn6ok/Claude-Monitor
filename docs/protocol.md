@@ -427,6 +427,7 @@ session_k = HKDF-SHA256(ikm = shared,
 | `activity` | `action`, `target?` | `edit_file` / `bridge/src/main.cpp` |
 | `output` | `text` | текстова репліка Claude |
 | `prompt` | `text?`, `img?` | повідомлення користувача; `img` — скільки зображень було надіслано (самі зображення не передаються) |
+| `node` | `text`, `node?` | рядок від [вузла](nodes.md): «Натискаю: Файл»; `node` — назва вузла, щоб було видно, що це слова мода, а не Claude |
 | `result` | `status`, `text` | `success` / `42 tests passed` |
 | `session` | `event` | `started`, `ended` |
 
