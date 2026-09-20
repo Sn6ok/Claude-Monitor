@@ -336,7 +336,8 @@ std::string BuildSnapshotJson(const SessionManager& manager,
                               bool claudeDesktopRunning,
                               double cpuPercent,
                               double rssMb,
-                              size_t maxEventsPerSession) {
+                              size_t maxEventsPerSession,
+                              const std::vector<NodeResult>* nodes) {
     std::string out;
     json::Writer writer(out);
 
@@ -371,6 +372,35 @@ std::string BuildSnapshotJson(const SessionManager& manager,
         WriteSession(writer, session, maxEventsPerSession);
     }
     writer.endArray();
+
+    // Вузли — необов'язкове розширення. Немає жодного — немає й поля:
+    // застосунки старіших версій не мають бачити нічого нового.
+    if (nodes != nullptr && !nodes->empty()) {
+        writer.key("nodes");
+        writer.beginArray();
+        for (const NodeResult& node : *nodes) {
+            writer.beginObject();
+            writer.field("id", node.id);
+            writer.field("name", node.name);
+            writer.field("status", node.status);
+            writer.field("updated_at", node.updatedAtMs);
+            if (node.error != NodeError::None) writer.field("error", ToString(node.error));
+            if (!node.text.empty()) writer.field("text", node.text);
+            if (!node.lines.empty()) {
+                writer.key("lines");
+                writer.beginArray();
+                for (const NodeLine& line : node.lines) {
+                    writer.beginObject();
+                    writer.field("label", line.label);
+                    writer.field("value", line.value);
+                    writer.endObject();
+                }
+                writer.endArray();
+            }
+            writer.endObject();
+        }
+        writer.endArray();
+    }
 
     // Завершені задачі передаються окремим переліком: користувач бачить,
     // що робота скінчилася, але вони не змішуються з активними.

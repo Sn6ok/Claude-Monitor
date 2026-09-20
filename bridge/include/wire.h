@@ -11,6 +11,7 @@
 #include "crypto.h"
 #include "events.h"
 #include "json.h"
+#include "nodes.h"
 #include "state.h"
 
 namespace cm {
@@ -68,7 +69,8 @@ std::string BuildSnapshotJson(const SessionManager& manager,
                               bool claudeDesktopRunning,
                               double cpuPercent,
                               double rssMb,
-                              size_t maxEventsPerSession = kMaxSnapshotEvents);
+                              size_t maxEventsPerSession = kMaxSnapshotEvents,
+                              const std::vector<NodeResult>* nodes = nullptr);
 
 /// Формує пакет подій.
 std::string BuildEventsJson(const std::vector<Event>& events);

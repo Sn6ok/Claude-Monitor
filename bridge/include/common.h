@@ -26,8 +26,8 @@ namespace cm {
 // ── Версії ───────────────────────────────────────────────────────────────────
 
 inline constexpr int kProtocolVersion = 1;
-inline constexpr wchar_t kBridgeVersion[] = L"1.0.0";
-inline constexpr char kBridgeVersionA[] = "1.0.0";
+inline constexpr wchar_t kBridgeVersion[] = L"2.0.0-beta";
+inline constexpr char kBridgeVersionA[] = "2.0.0-beta";
 
 // ── Ліміти ───────────────────────────────────────────────────────────────────
 //

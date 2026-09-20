@@ -77,6 +77,7 @@ add_library(bridge_core STATIC
     src/watcher.cpp
     src/lifecycle.cpp
     src/hookpipe.cpp
+    src/nodes.cpp
     src/wire.cpp
 )
 
@@ -118,6 +119,7 @@ add_executable(bridge_tests
     tests/test_queue.cpp
     tests/test_crypto.cpp
     tests/test_phones.cpp
+    tests/test_nodes.cpp
 )
 target_link_libraries(bridge_tests PRIVATE bridge_core)
 

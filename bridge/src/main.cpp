@@ -20,6 +20,7 @@
 #include "hookpipe.h"
 #include "lifecycle.h"
 #include "logging.h"
+#include "nodes.h"
 #include "pairing.h"
 #include "queue.h"
 #include "sessions.h"
@@ -213,7 +214,8 @@ public:
     BridgeApp(Config& config, Identity& identity)
         : config_(config),
           identity_(identity),
-          manager_([this](Event&& event) { OnEvent(std::move(event)); }) {}
+          manager_([this](Event&& event) { OnEvent(std::move(event)); }),
+          nodes_(config.dataDir + L"\\nodes") {}
 
     int Run();
 
@@ -283,6 +285,10 @@ private:
     SessionScanner scanner_;
     WatchSet       watch_;
     HookPipeServer hookServer_;
+
+    /// Вузли: розширення користувача. Живуть у власному потоці й на решту
+    /// Bridge не впливають — навіть якщо вузол зависне.
+    NodeRunner     nodes_;
 
     // Телефони читає потік читання (розшифрування, присутність) і потік
     // мережі (шифрування, відправлення), тож доступ — під замком.
@@ -366,10 +372,12 @@ void BridgeApp::RefreshSnapshotPayload() {
     // командами він міг би перерости межу кадру і тоді не дійшов би ніколи,
     // а без знімка телефон не отримує й подій. Тож за потреби беремо менше
     // останніх подій на задачу: стан важливіший за історію.
+    const std::vector<NodeResult> nodeCards = nodes_.results();
+
     std::string payload;
     for (size_t eventsPerSession : {kMaxSnapshotEvents, size_t{10}, size_t{5}, size_t{0}}) {
         payload = BuildSnapshotJson(manager_, host, uptimeSec, desktopProcess_.valid(),
-                                    cpu, rss, eventsPerSession);
+                                    cpu, rss, eventsPerSession, &nodeCards);
         if (ForwardFrameBytes(payload.size()) <= kMaxFrameBytes) break;
     }
 
@@ -968,6 +976,10 @@ int BridgeApp::Run() {
 
     hookServer_.Start([this](const HookMessage& message) { HandleHookMessage(message); });
 
+    // Вузли підключаються останніми: без них Bridge працює так само.
+    nodes_.Start();
+    if (nodes_.count() > 0) Log().Infof("вузлів підключено: %zu", nodes_.count());
+
     RescanSessions();
     Log().Infof("Bridge працює, задач під наглядом: %zu", manager_.sessions().size());
 
@@ -1121,6 +1133,7 @@ int BridgeApp::Run() {
     state_ = BridgeState::ShuttingDown;
     Log().Info("завершення роботи");
 
+    nodes_.Stop();
     hookServer_.Stop();
     watch_.Shutdown();
 
