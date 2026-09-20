@@ -38,6 +38,10 @@ inline constexpr size_t kMaxNodeValue = 160;       ///< значення ряд�
 inline constexpr size_t kMaxNodeText = 512;        ///< вільний текст картки
 inline constexpr size_t kMaxNodeOutputBytes = 64 * 1024;
 
+inline constexpr size_t kMaxNodeRules = 8;         ///< правил на вузол
+inline constexpr size_t kMaxNodeRuleArgs = 8;      ///< аргументів у правилі
+inline constexpr size_t kMaxNodeMessage = 160;     ///< рядок вузла в чаті
+
 inline constexpr uint32_t kMinNodeIntervalSec = 5;
 inline constexpr uint32_t kDefaultNodeIntervalSec = 30;
 inline constexpr uint32_t kMaxNodeTimeoutSec = 30;
@@ -56,6 +60,23 @@ enum class NodeError : uint8_t {
 
 const char* ToString(NodeError error);
 
+/// Правило, яким вузол підписує команду Claude Code рядком у чаті.
+///
+/// Вузол не бачить ні транскриптів, ні сесій: він лише каже, як назвати
+/// команду. Bridge упізнає команду сам і додає рядок саме тій задачі,
+/// яка її виконала, — приписувати навмання нічого не доводиться.
+///
+///   { "match": "click.py", "args": ["x","y","label"],
+///     "text": "Натискаю: {label}", "fallback": "Натискаю: точка {x}, {y}" }
+struct NodeCommandRule {
+    std::string              nodeId;     ///< чий це рядок — для чесної підписи
+    std::string              nodeName;
+    std::string              match;      ///< підрядок команди (регістр не важливий)
+    std::vector<std::string> args;       ///< імена аргументів після match
+    std::string              text;       ///< шаблон із {імена}
+    std::string              fallback;   ///< коли якогось аргументу немає
+};
+
 /// Опис вузла з node.json.
 struct NodeManifest {
     std::string id;           ///< з імені каталогу, якщо не задано явно
@@ -63,6 +84,7 @@ struct NodeManifest {
     std::string description;
     std::string version;
     std::string run;          ///< що запускати; шлях — відносно каталогу вузла
+    std::vector<NodeCommandRule> commands;  ///< як підписувати команди в чаті
     uint32_t    intervalSec = kDefaultNodeIntervalSec;
     uint32_t    timeoutSec = kDefaultNodeTimeoutSec;
     bool        enabled = true;
@@ -103,6 +125,15 @@ NodeResult ParseNodeOutput(const NodeManifest& manifest, std::string_view output
 /// Результат вузла, який не вдалося виконати.
 NodeResult MakeNodeFailure(const NodeManifest& manifest, NodeError error, uint64_t nowMs);
 
+/// Застосовує правило до команди.
+///
+/// Команда розбирається на слова з урахуванням лапок; слова після `match`
+/// стають значеннями `args`. Якщо якогось значення немає — береться
+/// `fallback`, а якщо немає і його, правило не спрацьовує.
+///
+/// @returns рядок для чату або порожньо, якщо правило не підходить
+std::string ApplyNodeCommandRule(const NodeCommandRule& rule, std::string_view command);
+
 /// Повний командний рядок для запуску вузла.
 ///
 /// Зручність, заради якої вузол пишеться одним файлом: `run.ps1` само
@@ -133,6 +164,13 @@ public:
     /// Копія останніх результатів — для знімка стану.
     std::vector<NodeResult> results() const;
 
+    /// Копія правил усіх увімкнених вузлів.
+    std::vector<NodeCommandRule> commandRules() const;
+
+    /// Змінюється щоразу, коли набір правил став іншим. Дозволяє не копіювати
+    /// правила щоразу, а лише коли в папці справді щось змінилось.
+    uint32_t rulesVersion() const { return rulesVersion_.load(); }
+
     size_t count() const;
 
 private:
@@ -151,8 +189,10 @@ private:
     std::wstring directory_;
 
     mutable Lock      lock_;
-    std::vector<Entry>      entries_;   ///< під lock_
-    std::vector<NodeResult> results_;   ///< під lock_
+    std::vector<Entry>           entries_;   ///< під lock_
+    std::vector<NodeResult>      results_;   ///< під lock_
+    std::vector<NodeCommandRule> rules_;     ///< під lock_
+    std::atomic<uint32_t>        rulesVersion_{0};
 
     Handle            thread_;
     Handle            wakeEvent_;

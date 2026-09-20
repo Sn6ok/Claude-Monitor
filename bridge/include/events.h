@@ -46,6 +46,7 @@ enum class EventKind : uint8_t {
     Result,       ///< результат виконання інструмента
     Session,      ///< поява або зникнення сесії
     Prompt,       ///< запит користувача — друга половина розмови
+    Node,         ///< рядок від вузла: «Натискаю: Файл»
 };
 
 const char* ToString(EventKind kind);

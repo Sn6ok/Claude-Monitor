@@ -248,6 +248,13 @@ void WriteEvent(json::Writer& writer, const Event& event, size_t maxText) {
             writer.field("state", ToString(event.state));
             break;
 
+        case EventKind::Node:
+            // Ім'я вузла їде поруч із текстом: у чаті має бути видно, що це
+            // рядок мода, а не слова Claude.
+            if (!event.target.empty()) writer.field("node", event.target);
+            writeText("text");
+            break;
+
         case EventKind::Output:
         case EventKind::Prompt:
             writeText("text");

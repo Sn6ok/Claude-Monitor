@@ -6,6 +6,8 @@
 #include "test_framework.h"
 #include "state.h"
 
+#include <cstdio>
+#include <string>
 #include <vector>
 
 using namespace cm;
@@ -319,4 +321,107 @@ CM_TEST(state, limit_without_known_reset_time_stays) {
     // Час скидання невідомий — вигадувати його не можна, ліміт знімає лише запит.
     CHECK_FALSE(harness.manager.ReleaseExpiredLimits(NowUnixMs()));
     CHECK(session.state == ClaudeState::Limited);
+}
+
+// ── Рядки вузлів у чаті ──────────────────────────────────────────────────────
+
+namespace {
+
+/// Записує транскрипт у тимчасовий файл і повертає шлях.
+std::wstring WriteTranscript(const wchar_t* name, const std::string& content) {
+    wchar_t directory[MAX_PATH]{};
+    ::GetTempPathW(MAX_PATH, directory);
+    const std::wstring path = std::wstring(directory) + name;
+
+    FILE* file = _wfopen(path.c_str(), L"wb");
+    if (file == nullptr) return {};
+    std::fwrite(content.data(), 1, content.size(), file);
+    std::fclose(file);
+    return path;
+}
+
+void AppendLine(const std::wstring& path, const std::string& line) {
+    FILE* file = _wfopen(path.c_str(), L"ab");
+    if (file == nullptr) return;
+    std::fwrite(line.data(), 1, line.size(), file);
+    std::fclose(file);
+}
+
+NodeCommandRule ClickRule() {
+    NodeCommandRule rule;
+    rule.nodeId = "claude-click";
+    rule.nodeName = "Claude Click";
+    rule.match = "click.py";
+    rule.args = {"x", "y", "label"};
+    rule.text = "Натискаю: {label}";
+    return rule;
+}
+
+const char* kClickCommand =
+    R"({"type":"assistant","timestamp":"2026-09-20T10:00:05.000Z","message":{)"
+    R"("stop_reason":"tool_use","content":[{"type":"tool_use","name":"Bash",)"
+    R"("input":{"command":"python click.py 640 300 \"Файл\""}}]}})" "\n";
+
+}  // namespace
+
+CM_TEST(state, node_rule_adds_line_to_the_same_task) {
+    const std::wstring path = WriteTranscript(
+        L"cm_node_rule_test.jsonl",
+        R"({"type":"user","timestamp":"2026-09-20T10:00:00.000Z","cwd":"D:\\Projects\\Demo",)"
+        R"("message":{"role":"user","content":"натисни Файл"}})" "\n");
+    CHECK(!path.empty());
+
+    Harness harness;
+    harness.manager.SetNodeRules({ClickRule()});
+
+    DiscoveredSession discovered = MakeDiscovered("sid-click", 100, "D:\\Projects\\Demo", "demo");
+    discovered.transcriptPath = path;
+    harness.manager.Reconcile({discovered});
+
+    // Клік стається вже під наглядом — саме цей шлях і несе події в чат.
+    harness.events.clear();
+    AppendLine(path, kClickCommand);
+    harness.manager.PollTranscripts();
+    ::DeleteFileW(path.c_str());
+
+    const Event* note = nullptr;
+    for (const Event& event : harness.events) {
+        if (event.kind == EventKind::Node) note = &event;
+    }
+
+    CHECK(note != nullptr);
+    if (note == nullptr) return;
+
+    CHECK_STR(note->text, "Натискаю: Файл");
+    CHECK_STR(note->target, "Claude Click");
+
+    // Рядок належить тій самій задачі, що виконала команду, і йде після неї.
+    CHECK_STR(note->sessionId, "sid-click");
+    for (const Event& event : harness.events) {
+        if (event.kind != EventKind::Activity) continue;
+        CHECK(event.sequence < note->sequence);
+    }
+}
+
+CM_TEST(state, without_rules_nothing_is_added) {
+    const std::wstring path = WriteTranscript(
+        L"cm_node_norule_test.jsonl",
+        R"({"type":"user","timestamp":"2026-09-20T10:00:00.000Z","cwd":"D:\\Projects\\Demo",)"
+        R"("message":{"role":"user","content":"натисни Файл"}})" "\n");
+    CHECK(!path.empty());
+
+    Harness harness;   // правил немає — типова робота без модів
+
+    DiscoveredSession discovered = MakeDiscovered("sid-plain", 100, "D:\\Projects\\Demo", "demo");
+    discovered.transcriptPath = path;
+    harness.manager.Reconcile({discovered});
+
+    harness.events.clear();
+    AppendLine(path, kClickCommand);
+    harness.manager.PollTranscripts();
+    ::DeleteFileW(path.c_str());
+
+    for (const Event& event : harness.events) {
+        CHECK(event.kind != EventKind::Node);
+    }
 }

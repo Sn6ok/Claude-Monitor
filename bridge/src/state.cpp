@@ -34,6 +34,7 @@ const char* ToString(EventKind kind) {
         case EventKind::Result:   return "result";
         case EventKind::Session:  return "session";
         case EventKind::Prompt:   return "prompt";
+        case EventKind::Node:     return "node";
     }
     return "output";
 }
@@ -92,7 +93,35 @@ std::string LastSegment(std::string_view path) {
 
 SessionManager::SessionManager(EventSink sink) : sink_(std::move(sink)) {}
 
+void SessionManager::SetNodeRules(std::vector<NodeCommandRule> rules) {
+    nodeRules_ = std::move(rules);
+}
+
+std::string SessionManager::MatchNodeRule(const Event& event, std::string& nodeName) const {
+    if (event.kind != EventKind::Activity) return {};
+    if (event.action != ActivityAction::RunCommand) return {};
+    if (nodeRules_.empty() || event.target.empty()) return {};
+
+    // Перше правило, яке підійшло. Один рядок на команду: мод не має права
+    // перетворити чат на потік власних повідомлень.
+    for (const NodeCommandRule& rule : nodeRules_) {
+        std::string text = ApplyNodeCommandRule(rule, event.target);
+        if (text.empty()) continue;
+        nodeName = rule.nodeName;
+        return text;
+    }
+    return {};
+}
+
 void SessionManager::Emit(Event&& event) {
+    // Команду міг упізнати вузол — тоді слідом за дією в чат іде його рядок
+    // («Натискаю: Файл»). Задача та сама, що виконала команду: приписувати
+    // рядок навмання нікуди не доводиться.
+    std::string nodeName;
+    const std::string nodeText = MatchNodeRule(event, nodeName);
+    const std::string nodeSessionId = nodeText.empty() ? std::string() : event.sessionId;
+    const uint64_t nodeTimestampMs = event.timestampMs;
+
     event.sequence = nextSequence();
 
     // Копія події осідає в буфері своєї сесії — саме з нього формується
@@ -105,6 +134,17 @@ void SessionManager::Emit(Event&& event) {
     }
 
     if (sink_) sink_(std::move(event));
+
+    if (!nodeText.empty()) {
+        Event note;
+        note.sessionId = nodeSessionId;
+        note.timestampMs = nodeTimestampMs;
+        note.kind = EventKind::Node;
+        note.priority = Priority::Medium;
+        note.target = nodeName;   // чий це рядок — видно в застосунку
+        note.text = nodeText;
+        Emit(std::move(note));
+    }
 }
 
 SessionState& SessionManager::AddSession(const DiscoveredSession& discovered) {

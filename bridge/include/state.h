@@ -8,6 +8,7 @@
 #pragma once
 
 #include "events.h"
+#include "nodes.h"
 #include "sessions.h"
 
 #include <functional>
@@ -55,6 +56,10 @@ public:
     /// Обробляє сигнал від hook: сесія завершилась.
     void MarkFinished(const std::string& sessionId);
 
+    /// Правила вузлів: як підписувати команди рядком у чаті.
+    /// Порожній перелік — жодних рядків від вузлів (типова робота).
+    void SetNodeRules(std::vector<NodeCommandRule> rules);
+
     Summary BuildSummary() const;
 
     const std::map<std::string, SessionState>& sessions() const { return sessions_; }
@@ -68,6 +73,9 @@ private:
     void RetireSession(const std::string& sessionId, ClaudeState finalState);
     void Emit(Event&& event);
 
+    /// @returns рядок вузла для цієї події або порожньо
+    std::string MatchNodeRule(const Event& event, std::string& nodeName) const;
+
     EventSink sink_;
     std::map<std::string, SessionState> sessions_;
 
@@ -76,6 +84,9 @@ private:
     std::deque<SessionState> finished_;
 
     uint64_t sequence_ = 0;
+
+    /// Правила вузлів. Порожньо, поки в папці немає жодного мода з ними.
+    std::vector<NodeCommandRule> nodeRules_;
 };
 
 }  // namespace cm

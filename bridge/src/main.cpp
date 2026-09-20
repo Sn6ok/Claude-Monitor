@@ -289,6 +289,7 @@ private:
     /// Вузли: розширення користувача. Живуть у власному потоці й на решту
     /// Bridge не впливають — навіть якщо вузол зависне.
     NodeRunner     nodes_;
+    uint32_t       nodeRulesVersion_ = 0;
 
     // Телефони читає потік читання (розшифрування, присутність) і потік
     // мережі (шифрування, відправлення), тож доступ — під замком.
@@ -1047,6 +1048,15 @@ int BridgeApp::Run() {
 
         // Канал хуків перевіряється щоразу: він дешевий і не блокує.
         hookServer_.Consume();
+
+        // Мод могли покласти в папку щойно. Правила забираємо лише тоді,
+        // коли набір змінився: копіювати їх щосекунди немає сенсу.
+        if (const uint32_t version = nodes_.rulesVersion(); version != nodeRulesVersion_) {
+            nodeRulesVersion_ = version;
+            std::vector<NodeCommandRule> rules = nodes_.commandRules();
+            Log().Infof("правил від вузлів: %zu", rules.size());
+            manager_.SetNodeRules(std::move(rules));
+        }
 
         bool stateChanged = false;
 

@@ -55,6 +55,37 @@ bool EndsWithNoCase(std::string_view text, std::string_view suffix) {
     return true;
 }
 
+/// Розбирає перелік правил. Непридатне правило просто не потрапляє в перелік:
+/// решта вузла має працювати далі.
+std::vector<NodeCommandRule> ParseNodeCommands(const json::Value& array,
+                                               const NodeManifest& manifest) {
+    std::vector<NodeCommandRule> rules;
+    if (!array.isArray()) return rules;
+
+    for (size_t i = 0; i < array.size() && rules.size() < kMaxNodeRules; ++i) {
+        const json::Value& item = array[i];
+        if (!item.isObject()) continue;
+
+        NodeCommandRule rule;
+        rule.nodeId = manifest.id;
+        rule.nodeName = manifest.name.empty() ? manifest.id : manifest.name;
+        rule.match = Clean(item["match"].asStringOr(""), kMaxNodeValue);
+        rule.text = Clean(item["text"].asStringOr(""), kMaxNodeMessage);
+        rule.fallback = Clean(item["fallback"].asStringOr(""), kMaxNodeMessage);
+        if (rule.match.empty() || rule.text.empty()) continue;
+
+        const json::Value& args = item["args"];
+        if (args.isArray()) {
+            for (size_t a = 0; a < args.size() && rule.args.size() < kMaxNodeRuleArgs; ++a) {
+                rule.args.push_back(CleanId(args[a].asStringOr("")));
+            }
+        }
+
+        rules.push_back(std::move(rule));
+    }
+    return rules;
+}
+
 }  // namespace
 
 const char* ToString(NodeError error) {
@@ -96,9 +127,12 @@ NodeManifest ParseNodeManifest(std::string_view text, std::string_view folderId)
     manifest.version = Clean(root["version"].asStringOr(""), 24);
     manifest.run = Clean(root["run"].asStringOr(""), 512);
     manifest.enabled = root["enabled"].asBool(true);
+    manifest.commands = ParseNodeCommands(root["commands"], manifest);
 
-    if (manifest.run.empty()) {
-        manifest.problem = "не вказано, що запускати (поле run)";
+    // Вузол або щось запускає, або підписує команди. Порожній маніфест
+    // нічого не дає, і мовчки тримати його в переліку було б нечесно.
+    if (manifest.run.empty() && manifest.commands.empty()) {
+        manifest.problem = "не вказано ні що запускати (run), ні що підписувати (commands)";
         return manifest;
     }
 
@@ -169,6 +203,127 @@ NodeResult ParseNodeOutput(const NodeManifest& manifest, std::string_view output
         return MakeNodeFailure(manifest, NodeError::BadOutput, nowMs);
     }
     return result;
+}
+
+// ── Правила для чату ─────────────────────────────────────────────────────────
+
+namespace {
+
+/// Розбиває команду на слова з урахуванням лапок.
+std::vector<std::string> SplitCommand(std::string_view command) {
+    std::vector<std::string> tokens;
+    std::string current;
+    char quote = 0;
+
+    for (const char c : command) {
+        if (quote != 0) {
+            if (c == quote) {
+                quote = 0;
+            } else {
+                current.push_back(c);
+            }
+            continue;
+        }
+        if (c == '"' || c == '\'') {
+            quote = c;
+            continue;
+        }
+        if (c == ' ' || c == '\t') {
+            if (!current.empty()) {
+                tokens.push_back(current);
+                current.clear();
+            }
+            continue;
+        }
+        current.push_back(c);
+
+        // Довга команда з сотень слів нічого не додає: більшого за розумну
+        // межу все одно не буде, а пам'ять обмежена (Частина 4 §21).
+        if (tokens.size() >= 64) break;
+    }
+    if (!current.empty()) tokens.push_back(current);
+    return tokens;
+}
+
+char LowerAscii(char c) {
+    return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+}
+
+/// Регістронезалежний пошук підрядка: шляхи Windows пишуть як завгодно.
+bool ContainsNoCase(std::string_view haystack, std::string_view needle) {
+    if (needle.empty() || needle.size() > haystack.size()) return false;
+    for (size_t i = 0; i + needle.size() <= haystack.size(); ++i) {
+        size_t j = 0;
+        while (j < needle.size() && LowerAscii(haystack[i + j]) == LowerAscii(needle[j])) ++j;
+        if (j == needle.size()) return true;
+    }
+    return false;
+}
+
+/// Підставляє значення у шаблон. Немає значення — немає рядка.
+bool FillTemplate(std::string_view pattern,
+                  const std::vector<std::string>& names,
+                  const std::vector<std::string>& values,
+                  std::string& result) {
+    result.clear();
+
+    for (size_t i = 0; i < pattern.size(); ++i) {
+        if (pattern[i] != '{') {
+            result.push_back(pattern[i]);
+            continue;
+        }
+
+        const size_t close = pattern.find('}', i);
+        if (close == std::string_view::npos) {
+            result.push_back(pattern[i]);
+            continue;
+        }
+
+        const std::string_view name = pattern.substr(i + 1, close - i - 1);
+        i = close;
+
+        bool found = false;
+        for (size_t n = 0; n < names.size(); ++n) {
+            if (names[n] != name) continue;
+            if (n >= values.size() || values[n].empty()) return false;
+            result += values[n];
+            found = true;
+            break;
+        }
+        if (!found) return false;
+    }
+    return true;
+}
+
+}  // namespace
+
+std::string ApplyNodeCommandRule(const NodeCommandRule& rule, std::string_view command) {
+    if (rule.match.empty() || rule.text.empty() || command.empty()) return {};
+
+    const std::vector<std::string> tokens = SplitCommand(command);
+
+    size_t matched = tokens.size();
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        if (ContainsNoCase(tokens[i], rule.match)) {
+            matched = i;
+            break;
+        }
+    }
+    if (matched == tokens.size()) return {};
+
+    std::vector<std::string> values;
+    for (size_t a = 0; a < rule.args.size(); ++a) {
+        const size_t index = matched + 1 + a;
+        values.push_back(index < tokens.size() ? tokens[index] : std::string());
+    }
+
+    std::string filled;
+    if (!FillTemplate(rule.text, rule.args, values, filled)) {
+        if (rule.fallback.empty()) return {};
+        if (!FillTemplate(rule.fallback, rule.args, values, filled)) return {};
+    }
+
+    return CleanMultiline(filled, kMaxNodeMessage);
 }
 
 // ── Командний рядок ──────────────────────────────────────────────────────────
@@ -262,6 +417,26 @@ size_t NodeRunner::Reload() {
         }
     }
 
+    // Правила з усіх вузлів в одному переліку: транскрипти читає інший потік,
+    // і копіювати їх щоразу не треба — лише коли набір справді змінився.
+    std::vector<NodeCommandRule> rules;
+    for (const Entry& entry : found) {
+        for (const NodeCommandRule& rule : entry.manifest.commands) {
+            rules.push_back(rule);
+        }
+    }
+
+    bool changed = rules.size() != rules_.size();
+    for (size_t i = 0; !changed && i < rules.size(); ++i) {
+        changed = rules[i].nodeId != rules_[i].nodeId || rules[i].match != rules_[i].match ||
+                  rules[i].text != rules_[i].text || rules[i].fallback != rules_[i].fallback ||
+                  rules[i].args != rules_[i].args;
+    }
+    if (changed) {
+        rules_ = std::move(rules);
+        rulesVersion_.fetch_add(1);
+    }
+
     entries_ = std::move(found);
     results_ = std::move(keep);
     return entries_.size();
@@ -305,6 +480,11 @@ std::vector<NodeResult> NodeRunner::results() const {
     return results_;
 }
 
+std::vector<NodeCommandRule> NodeRunner::commandRules() const {
+    Guard guard(lock_);
+    return rules_;
+}
+
 size_t NodeRunner::count() const {
     Guard guard(lock_);
     return entries_.size();
@@ -334,6 +514,8 @@ void NodeRunner::Loop() {
         {
             Guard guard(lock_);
             for (Entry& entry : entries_) {
+                // Вузол може лише підписувати команди — запускати в ньому нічого.
+                if (entry.manifest.run.empty()) continue;
                 if (entry.nextRunMonoMs > now) continue;
                 entry.nextRunMonoMs = now + entry.manifest.intervalSec * 1000ULL;
                 due.push_back(entry);

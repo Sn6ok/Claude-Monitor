@@ -206,3 +206,118 @@ CM_TEST(nodes, snapshot_without_nodes_has_no_field) {
         BuildSnapshotJson(manager, "PC", 10, true, 0.1, 4.2, kMaxSnapshotEvents, &empty);
     CHECK(emptyJson.find("\"nodes\"") == std::string::npos);
 }
+
+// ── Правила для чату ─────────────────────────────────────────────────────────
+
+namespace {
+
+const char* kClickManifest = R"({
+    "id": "claude-click",
+    "name": "Claude Click",
+    "commands": [
+        { "match": "click.py", "args": ["x", "y", "label"],
+          "text": "Натискаю: {label}", "fallback": "Натискаю: точка {x}, {y}" }
+    ]
+})";
+
+NodeCommandRule ClickRule() {
+    return ParseNodeManifest(kClickManifest, "claude-click").commands.at(0);
+}
+
+}  // namespace
+
+CM_TEST(nodes, manifest_reads_command_rules) {
+    const NodeManifest node = ParseNodeManifest(kClickManifest, "claude-click");
+
+    CHECK(node.valid);
+    CHECK_EQ(node.commands.size(), 1u);
+    CHECK_STR(node.commands[0].match, "click.py");
+    CHECK_STR(node.commands[0].nodeName, "Claude Click");
+    CHECK_EQ(node.commands[0].args.size(), 3u);
+    CHECK_STR(node.commands[0].args[2], "label");
+
+    // Вузол може лише підписувати команди — запускати в ньому нічого.
+    CHECK(node.run.empty());
+}
+
+CM_TEST(nodes, manifest_without_run_and_commands_is_rejected) {
+    const NodeManifest empty = Manifest(R"({"name":"Порожній"})");
+    CHECK(!empty.valid);
+    CHECK(!empty.problem.empty());
+
+    // Правило без match або без тексту нічого не означає — його не беремо.
+    const NodeManifest broken = Manifest(
+        R"({"run":"run.ps1","commands":[{"text":"без match"},{"match":"x.py"}]})");
+    CHECK(broken.valid);
+    CHECK(broken.commands.empty());
+}
+
+CM_TEST(nodes, manifest_limits_number_of_rules) {
+    std::string json = R"({"run":"run.ps1","commands":[)";
+    for (size_t i = 0; i < kMaxNodeRules + 6; ++i) {
+        if (i != 0) json += ",";
+        json += R"({"match":"a.py","text":"t"})";
+    }
+    json += "]}";
+
+    CHECK_EQ(Manifest(json.c_str()).commands.size(), kMaxNodeRules);
+}
+
+CM_TEST(nodes, rule_names_the_click) {
+    const NodeCommandRule rule = ClickRule();
+
+    // Рядок із лапками й шляхом — саме такий, яким його бачить Bridge.
+    const std::string quoted = R"(python "D:\Claude Click\click.py" 640 300 "Файл")";
+    const std::string full = ApplyNodeCommandRule(rule, quoted);
+    CHECK_STR(full, "Натискаю: Файл");
+
+    // Підпис із пробілами лишається цілим — лапки на те й потрібні.
+    const std::string spacedCommand = R"(python click.py 10 20 "Зберегти як")";
+    const std::string spaced = ApplyNodeCommandRule(rule, spacedCommand);
+    CHECK_STR(spaced, "Натискаю: Зберегти як");
+
+    // Регістр у шляхах Windows довільний.
+    const std::string upperCommand = R"(python C:\tools\CLICK.PY 1 2 Меню)";
+    const std::string upper = ApplyNodeCommandRule(rule, upperCommand);
+    CHECK_STR(upper, "Натискаю: Меню");
+}
+
+CM_TEST(nodes, rule_falls_back_when_label_is_missing) {
+    const NodeCommandRule rule = ClickRule();
+
+    const std::string fallback = ApplyNodeCommandRule(rule, "python click.py 640 300");
+    CHECK_STR(fallback, "Натискаю: точка 640, 300");
+
+    // Немає ні підпису, ні координат — вигадувати нічого не будемо.
+    CHECK(ApplyNodeCommandRule(rule, "python click.py").empty());
+}
+
+CM_TEST(nodes, rule_ignores_other_commands) {
+    const NodeCommandRule rule = ClickRule();
+
+    CHECK(ApplyNodeCommandRule(rule, "npm test").empty());
+    CHECK(ApplyNodeCommandRule(rule, "python screenshot.py").empty());
+    CHECK(ApplyNodeCommandRule(rule, "").empty());
+}
+
+CM_TEST(nodes, rule_without_arguments_still_works) {
+    const NodeManifest node = Manifest(
+        R"({"run":"run.ps1","commands":[{"match":"screenshot.py","text":"Дивлюся на екран"}]})");
+
+    const std::string shot = ApplyNodeCommandRule(node.commands.at(0), "python screenshot.py");
+    CHECK_STR(shot, "Дивлюся на екран");
+}
+
+CM_TEST(nodes, rule_message_is_trimmed) {
+    const NodeManifest node = Manifest(
+        R"({"run":"run.ps1","commands":[{"match":"click.py","args":["label"],
+            "text":"Натискаю: {label}"}]})");
+
+    const std::string longLabel(400, 'x');
+    const std::string message =
+        ApplyNodeCommandRule(node.commands.at(0), "python click.py " + longLabel);
+
+    CHECK(!message.empty());
+    // Межа плюс позначка обрізання: «…» дописується вже після межі.
+    CHECK(message.size() <= kMaxNodeMessage + 8);
+}
