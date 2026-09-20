@@ -92,4 +92,41 @@ class NodesTest {
         val node = snapshotWith("""[{"id":"many","status":"ok","lines":[$lines]}]""")!!.nodes.single()
         assertEquals(Protocol.MAX_NODE_LINES, node.lines.size)
     }
+
+    // ── Рядки вузлів у чаті ──────────────────────────────────────────────
+
+    @Test
+    fun `рядок вузла приходить окремим видом події`() {
+        val events = Protocol.parseEventsMessage(
+            """{"t":"events","items":[{"sid":"s1","seq":9,"ts":1700000000000,
+               "k":"node","node":"Claude Click","text":"Натискаю: Файл"}]}"""
+        )
+
+        assertNotNull(events)
+        val event = events!!.single()
+        assertEquals(Protocol.EventKind.NODE, event.kind)
+        assertEquals("s1", event.sessionId)
+        assertEquals("Claude Click", event.nodeName)
+        assertEquals("Натискаю: Файл", event.text)
+    }
+
+    @Test
+    fun `рядок вузла без назви лишається без назви`() {
+        val event = Protocol.parseEventsMessage(
+            """{"t":"events","items":[{"sid":"s1","seq":1,"ts":1,"k":"node","text":"Дивлюся"}]}"""
+        )!!.single()
+
+        assertNull(event.nodeName)
+        assertEquals("Дивлюся", event.text)
+    }
+
+    @Test
+    fun `рядок вузла без задачі відкидається`() {
+        val events = Protocol.parseEventsMessage(
+            """{"t":"events","items":[{"seq":1,"ts":1,"k":"node","text":"Натискаю: Файл"}]}"""
+        )
+
+        assertNotNull(events)
+        assertTrue(events!!.isEmpty())
+    }
 }

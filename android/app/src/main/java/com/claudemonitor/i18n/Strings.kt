@@ -86,6 +86,8 @@ class Strings(
 
     // ── Вузли ──
     val sectionNodes: String,
+    /** Підпис рядка, коли вузол не назвався. */
+    val nodeLine: String,
     val nodeErrorStart: String,
     val nodeErrorTimeout: String,
     val nodeErrorExit: String,
@@ -295,6 +297,7 @@ val UkStrings = Strings(
     emptyNoTasksHint = "Щойно ви почнете роботу в Claude Code, задача з'явиться тут.",
 
     sectionNodes = "ВУЗЛИ",
+    nodeLine = "вузол",
     nodeErrorStart = "вузол не вдалося запустити",
     nodeErrorTimeout = "вузол не встиг відповісти",
     nodeErrorExit = "вузол завершився з помилкою",
@@ -514,6 +517,7 @@ val EnStrings = Strings(
     emptyNoTasksHint = "As soon as you start working in Claude Code, the task will appear here.",
 
     sectionNodes = "NODES",
+    nodeLine = "node",
     nodeErrorStart = "the node could not be started",
     nodeErrorTimeout = "the node did not answer in time",
     nodeErrorExit = "the node finished with an error",

@@ -72,7 +72,10 @@ object Protocol {
         RESULT("result"),
         SESSION("session"),
         /** Повідомлення користувача — друга половина розмови. */
-        PROMPT("prompt");
+        PROMPT("prompt"),
+
+        /** Рядок від вузла: «Натискаю: Файл». Пише мод, а не Claude. */
+        NODE("node");
 
         companion object {
             fun from(value: String?): EventKind? = entries.firstOrNull { it.wire == value }
@@ -94,6 +97,13 @@ object Protocol {
         val target: String? = null,
         val text: String? = null,
         val isError: Boolean = false,
+
+        /**
+         * Назва вузла, який написав цей рядок (лише для [EventKind.NODE]).
+         *
+         * У чаті має бути видно, що рядок надійшов від мода, а не від Claude.
+         */
+        val nodeName: String? = null,
         /** Спільний номер частин однієї довгої репліки; 0 — репліка не ділилась. */
         val groupId: Long = 0,
         /** Номер частини (у склеєній репліці — останньої отриманої). */
@@ -525,6 +535,7 @@ object Protocol {
                     text = item.optString("text").ifEmpty { null }
                         ?: item.optString("event").ifEmpty { null },
                     isError = item.optString("status") == "error",
+                    nodeName = item.optString("node").ifEmpty { null },
                     groupId = item.optLong("gid", 0),
                     part = item.optInt("pt", 0),
                     partCount = item.optInt("pc", 1).coerceAtLeast(1),

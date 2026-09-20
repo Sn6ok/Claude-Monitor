@@ -515,6 +515,8 @@ private fun CompactLine(event: Protocol.MonitorEvent, onCopy: (String) -> Unit) 
     val marker = when {
         event.kind == Protocol.EventKind.RESULT && isError -> "✕"
         event.kind == Protocol.EventKind.RESULT -> "✓"
+        // Рядок вузла позначений окремо: його написав мод, а не Claude.
+        event.kind == Protocol.EventKind.NODE -> "⚙"
         else -> "›"
     }
     val markerColor = when {
@@ -557,6 +559,19 @@ private fun CompactLine(event: Protocol.MonitorEvent, onCopy: (String) -> Unit) 
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
+                } else if (event.kind == Protocol.EventKind.NODE) {
+                    // Хто це написав — видно одразу, щоб рядок мода не
+                    // виглядав як слова Claude.
+                    Text(
+                        text = event.nodeName ?: strings.nodeLine,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = event.text.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 } else {
                     // Вивід — теж повністю: найважливіше в ньому часто
                     // саме в тих рядках, які раніше ховались за «…».
@@ -630,6 +645,9 @@ private fun chatAsText(
             }
             Protocol.EventKind.SESSION ->
                 append(time).append("— ").append(statusText(event, strings)).append(" —\n")
+            Protocol.EventKind.NODE ->
+                append(time).append("⚙ [").append(event.nodeName ?: strings.nodeLine)
+                    .append("] ").append(event.text.orEmpty()).append('\n')
         }
     }
 }.trimEnd()
