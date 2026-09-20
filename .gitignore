@@ -1,0 +1,50 @@
+# Залежності
+node_modules/
+
+# Збірка Windows Bridge
+bridge/build/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Збірка Android
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/.kotlin/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Локальні дані та секрети — НІКОЛИ не потрапляють у репозиторій
+*.key
+*.pem
+*.crt
+devices.json
+relay/data/
+.env
+.env.*
+
+# Тимчасові файли
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Локальні налаштування й ключі. Зазвичай вони лежать у %USERPROFILE%\.claude-monitor,
+# але якщо хтось скопіює їх у репозиторій — вони однаково не потраплять у git.
+setup.json
+tunnel.json
+ngrok-token.bin
+peer.json
+identity.bin
+bridge.json
+bridge.log
+*.output
+
+# Підпис APK
+*.idsig

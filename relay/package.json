@@ -1,0 +1,21 @@
+{
+  "name": "claude-monitor-relay",
+  "version": "1.0.0",
+  "description": "Захищений relay для Claude Monitor: автентифікація, авторизація та маршрутизація без доступу до вмісту повідомлень",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js --dev",
+    "test": "node --test \"test/*.test.js\"",
+    "test:verbose": "node --test --test-reporter=spec \"test/*.test.js\""
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
