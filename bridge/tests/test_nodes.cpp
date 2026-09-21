@@ -292,6 +292,19 @@ CM_TEST(nodes, rule_falls_back_when_label_is_missing) {
     CHECK(ApplyNodeCommandRule(rule, "python click.py").empty());
 }
 
+CM_TEST(nodes, rule_stops_at_shell_separators) {
+    const NodeCommandRule rule = ClickRule();
+
+    // Команда в транскрипті часто не одна: підпис не має тягти за собою «;».
+    const std::string chained = ApplyNodeCommandRule(
+        rule, "python click.py 10 20 \"Файл\"; echo done");
+    CHECK_STR(chained, "Натискаю: Файл");
+
+    const std::string andThen = ApplyNodeCommandRule(
+        rule, "python click.py 10 20 Меню && python screenshot.py");
+    CHECK_STR(andThen, "Натискаю: Меню");
+}
+
 CM_TEST(nodes, rule_ignores_other_commands) {
     const NodeCommandRule rule = ClickRule();
 

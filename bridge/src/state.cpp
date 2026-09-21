@@ -1,6 +1,7 @@
 // state.cpp — машина станів і керування набором сесій.
 
 #include "state.h"
+#include "logging.h"
 #include "transcript.h"
 
 namespace cm {
@@ -108,8 +109,14 @@ std::string SessionManager::MatchNodeRule(const Event& event, std::string& nodeN
         std::string text = ApplyNodeCommandRule(rule, event.target);
         if (text.empty()) continue;
         nodeName = rule.nodeName;
+
+        // Видно в журналі: правило спрацювало, і що саме побачить телефон.
+        // Без цього налагоджувати чужий мод довелося б наосліп.
+        Log().Infof("вузол %s підписав команду: %s", rule.nodeId.c_str(), text.c_str());
         return text;
     }
+
+    Log().Debugf("жодне правило вузлів не підійшло до команди: %s", event.target.c_str());
     return {};
 }
 

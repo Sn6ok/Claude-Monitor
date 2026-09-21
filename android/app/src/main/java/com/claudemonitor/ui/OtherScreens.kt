@@ -350,6 +350,23 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // Версія — щоб було видно, яка збірка стоїть на цьому телефоні:
+        // частина можливостей (як-от вузли) з'являється саме з нею.
+        val context = LocalContext.current
+        val version = remember {
+            runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            }.getOrNull().orEmpty()
+        }
+        if (version.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Claude Monitor $version",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

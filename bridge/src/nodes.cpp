@@ -228,7 +228,10 @@ std::vector<std::string> SplitCommand(std::string_view command) {
             quote = c;
             continue;
         }
-        if (c == ' ' || c == '\t') {
+        // Пробіл і роздільники оболонки завершують слово. Інакше підпис
+        // із «click.py 1 2 "Файл"; далі» приїхав би як «Файл;».
+        if (c == ' ' || c == '\t' || c == ';' || c == '&' || c == '|' ||
+            c == '<' || c == '>' || c == '\n' || c == '\r') {
             if (!current.empty()) {
                 tokens.push_back(current);
                 current.clear();
